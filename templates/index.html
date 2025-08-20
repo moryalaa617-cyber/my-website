@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مولّد المقالات الصحفية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css' ) }}">
+    <style>
+        /* أنماط إضافية للنافذة المنبثقة (Modal) */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: #0f1419; margin: 15% auto; padding: 30px;
+            border: 1px solid rgba(255, 152, 0, 0.3); width: 80%; max-width: 500px;
+            border-radius: 15px; position: relative;
+        }
+        .close-btn {
+            color: #aaa; float: left; font-size: 28px; font-weight: bold;
+            position: absolute; left: 20px; top: 10px;
+        }
+        .close-btn:hover, .close-btn:focus {
+            color: #ff9800; text-decoration: none; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="{{ url_for('static', filename='leo.jpeg') }}" alt="شعار الموقع" class="header-logo">
+            <h2>مولّد المقالات الصحفية بالذكاء الاصطناعي</h2>
+            <p>أدخل كلمة أو جملة قصيرة، ودع الذكاء الاصطناعي يحولها إلى مقال صحفي متكامل.</p>
+            <!-- زر الإعدادات الجديد -->
+            <button id="settingsBtn" class="settings-btn" style="margin-top: 20px;">الإعدادات</button>
+        </header>
+
+        <main>
+            <div class="form-container">
+                <form id="article-form">
+                    <label for="userInput">الموضوع الرئيسي للمقال</label>
+                    <textarea id="userInput" name="prompt" placeholder="مثال: مستقبل الطاقة المتجددة في الشرق الأوسط" required></textarea>
+                    <button type="submit" id="generateBtn">
+                        توليد المقال
+                        <span id="loader" class="loading" style="display: none;"></span>
+                    </button>
+                </form>
+            </div>
+            <div id="result-wrapper" class="result-container" style="display: none;">
+                <div id="result" class="result-content-box"></div>
+                <p class="ai-disclaimer">تم إنشاء هذا المقال بواسطة Gemini 1.5 Flash. يرجى مراجعته قبل النشر.</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>جميع الحقوق محفوظة © 2025</p>
+        </footer>
+    </div>
+
+    <!-- نافذة الإعدادات المنبثقة (Modal) -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span id="closeModalBtn" class="close-btn">&times;</span>
+            <h2>إعدادات الواجهة البرمجية (API)</h2>
+            <form id="settings-form" style="margin-top: 20px;">
+                <label for="serviceProvider">مزود الخدمة</label>
+                <select id="serviceProvider" name="serviceProvider">
+                    <option value="gemini-1.5-flash" selected>Gemini 1.5 Flash</option>
+                </select>
+
+                <label for="apiKeyInput">مفتاح الـ API الخاص بك</label>
+                <input type="password" id="apiKeyInput" placeholder="أدخل مفتاح الـ API هنا" required>
+
+                <button type="submit" class="secondary-btn" style="margin: 20px auto 0; display: block;">حفظ الإعدادات</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- التحكم في نافذة الإعدادات ---
+        const settingsModal = document.getElementById('settingsModal');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        settingsBtn.onclick = () => settingsModal.style.display = "block";
+        closeModalBtn.onclick = () => settingsModal.style.display = "none";
+        window.onclick = (event) => {
+            if (event.target == settingsModal) {
+                settingsModal.style.display = "none";
+            }
+        };
+
+        // --- حفظ واسترجاع مفتاح الـ API ---
+        const settingsForm = document.getElementById('settings-form');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+
+        // عند تحميل الصفحة، حاول استرجاع المفتاح المحفوظ
+        apiKeyInput.value = localStorage.getItem('userApiKey') || '';
+
+        settingsForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const userApiKey = apiKeyInput.value;
+            if (userApiKey) {
+                localStorage.setItem('userApiKey', userApiKey);
+                alert('تم حفظ مفتاح الـ API بنجاح!');
+                settingsModal.style.display = "none";
+            } else {
+                alert('الرجاء إدخال مفتاح الـ API.');
+            }
+        });
+
+        // --- منطق توليد المقال ---
+        document.getElementById('article-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const userApiKey = localStorage.getItem('userApiKey');
+            if (!userApiKey) {
+                alert('الرجاء إدخال مفتاح الـ API الخاص بك في الإعدادات أولاً.');
+                settingsModal.style.display = 'block';
+                return;
+            }
+
+            const form = event.target;
+            const formData = new FormData(form);
+            // إضافة مفتاح الـ API إلى البيانات المرسلة
+            formData.append('api_key', userApiKey);
+
+            const generateBtn = document.getElementById('generateBtn');
+            const loader = document.getElementById('loader');
+            const resultWrapper = document.getElementById('result-wrapper');
+            const resultDiv = document.getElementById('result');
+
+            generateBtn.disabled = true;
+            loader.style.display = 'inline-block';
+            resultWrapper.style.display = 'none';
+            resultDiv.innerHTML = '';
+
+            try {
+                // استبدل الرابط التالي بالرابط الذي سيعطيه لك Render
+                const backendUrl = 'YOUR_RENDER_BACKEND_URL/generate'; // <--- سنغير هذا لاحقاً
+
+                const response = await fetch(backendUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = data.article;
+                } else {
+                    resultDiv.innerHTML = `<strong>خطأ من الخادم:</strong> ${data.error || 'حدث خطأ غير متوقع.'}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<strong>فشل الاتصال بالخادم.</strong> تأكد من أن رابط الواجهة الخلفية صحيح وأن الخادم يعمل.';
+                console.error('Fetch Error:', error);
+            } finally {
+                resultWrapper.style.display = 'block';
+                generateBtn.disabled = false;
+                loader.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
